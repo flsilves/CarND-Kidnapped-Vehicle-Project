@@ -22,19 +22,18 @@
 using std::string;
 using std::vector;
 
-static std::default_random_engine random_engine;
-constexpr auto number_of_particles{200};
+static std::default_random_engine gen;
+constexpr auto number_of_particles{200};  // make me
 
-void ParticleFilter::init(double x, double y, double theta,
-                          double gps_sigma[]) {
-  std::normal_distribution<double> dist_x(x, gps_sigma[0]);
-  std::normal_distribution<double> dist_y(y, gps_sigma[1]);
-  std::normal_distribution<double> dist_theta(theta, gps_sigma[2]);
+void ParticleFilter::init(double x, double y, double theta, double std[]) {
+  std::normal_distribution<double> dist_x(x, std[0]);
+  std::normal_distribution<double> dist_y(y, std[1]);
+  std::normal_distribution<double> dist_theta(theta, std[2]);
 
   // Add noise to initial position using GPS standard deviation
-  const auto init_x = dist_x(random_engine);
-  const auto init_y = dist_y(random_engine);
-  const auto init_theta = dist_theta(random_engine);
+  const auto init_x = dist_x(gen);
+  const auto init_y = dist_y(gen);
+  const auto init_theta = dist_theta(gen);
 
   constexpr auto init_weight{1.0};
 
@@ -54,13 +53,35 @@ void ParticleFilter::init(double x, double y, double theta,
 
 void ParticleFilter::prediction(double delta_t, double std_pos[],
                                 double velocity, double yaw_rate) {
-  /**
-   * TODO: Add measurements to each particle and add random Gaussian noise.
-   * NOTE: When adding noise you may find std::normal_distribution
-   *   and std::default_random_engine useful.
-   *  http://en.cppreference.com/w/cpp/numeric/random/normal_distribution
-   *  http://www.cplusplus.com/reference/random/default_random_engine/
-   */
+  std::normal_distribution<double> dist_x(0.0, std_pos[0]);
+  std::normal_distribution<double> dist_y(0.0, std_pos[1]);
+  std::normal_distribution<double> dist_theta(0.0, std_pos[2]);
+
+  static const auto update_particles_zero_yaw = [&](Particle& p) {
+    const double dx = delta_t * velocity * cos(p.theta);
+    const double dy = delta_t * velocity * sin(p.theta);
+    p.x = p.x + dx + dist_x(gen);
+    p.y = p.y + dy + dist_y(gen);
+    return p;
+  };
+
+  static const auto update_particles = [&](Particle& p) {
+    const double th0 = p.theta;
+    const double dth = yaw_rate * delta_t;
+    const double dx = velocity * (sin(th0 + dth) - sin(th0)) / yaw_rate;
+    const double dy = velocity * (cos(th0) - cos(th0 + dth)) / yaw_rate;
+    p.x = p.x + dx + dist_x(gen);
+    p.y = p.y + dy + dist_y(gen);
+    return p;
+  };
+
+  if (abs(yaw_rate) < 1E-6) {
+    std::transform(particles.begin(), particles.end(), particles.begin(),
+                   update_particles_zero_yaw);
+  } else {
+    std::transform(particles.begin(), particles.end(), particles.begin(),
+                   update_particles);
+  }
 }
 
 void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
