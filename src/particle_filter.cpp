@@ -80,12 +80,13 @@ void ParticleFilter::dataAssociation(const vector<LandmarkObs>& predicted,
   for (auto& observation : observations) {
     double nearest_distance = std::numeric_limits<double>::max();
     int nearest_id = 0;
-    for (const auto& landmark : predicted) {
+    for (size_t i = 0; i < predicted.size(); ++i) {
+      auto landmark = predicted[i];
       const double distance =
           dist(observation.x, observation.y, landmark.x, landmark.y);
       if (distance < nearest_distance) {
         nearest_distance = distance;
-        nearest_id = landmark.id;
+        nearest_id = i;
       }
     }
     observation.id = nearest_id;
@@ -108,21 +109,24 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     return;
   }
 
-  int i = -1;
-  for (auto& particle : particles) {
-    i += 1;
-    const double p_x = particle.x;
-    const double p_y = particle.y;
-    const double p_theta = particle.theta;
+  // std::cout << "num_observations:" << observations.size() << std::endl;
 
-    // Create list of predicted landmarks in sensor range (/map frame).
-    vector<LandmarkObs> predicted_observations =
+  // for (auto& observation : observations) {
+  //  std::cout << "ids:" << observation.id << ",";
+  //}
+  std::cout << std::endl;
+
+  for (int i = 0; i < num_particles; weights[i] = particles[i].weight, ++i) {
+    const double p_x = particles[i].x;
+    const double p_y = particles[i].y;
+    const double p_theta = particles[i].theta;
+
+    // Create list of nearby_landmarks landmarks in sensor range (/map frame).
+    vector<LandmarkObs> landmarks_in_range =
         getNearLandmarks(p_x, p_y, sensor_range, map_landmarks);
 
-    if (predicted_observations.empty()) {
-      // dont update this particle and assign low weight;
-      particle.weight = 1e-9;
-      weights[i] = particle.weight;
+    if (landmarks_in_range.empty()) {
+      particles[i].weight = 1e-12;
       continue;
     }
 
@@ -142,36 +146,40 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                   get_map_coordinates);
 
     // associate observations to given landmarks.
-    dataAssociation(predicted_observations, map_observations);
+    dataAssociation(landmarks_in_range, map_observations);
 
     // std::vector<int> associations;
     // std::vector<double> sense_x;
     // std::vector<double> sense_y;
 
     // update weight using multivariate gaussian distribution
-    particle.weight = 1;
+    double W{1.0};
     for (const auto& observation : map_observations) {
       // debugging
       // associations.push_back(observation.id);
       // sense_x.push_back(observation.x);
       // sense_y.push_back(observation.y);
 
-      // get associated landmark
-      LandmarkObs landmark;
-      if (observation.id >= 0 &&
-          getLandmarkById(predicted_observations, observation.id, landmark)) {
-        // compute local weight
-        const double delta_x = observation.x - landmark.x;
-        const double delta_y = observation.y - landmark.y;
-        const double local_weight =
-            gaussian_norm * exp(-0.5 * (delta_x * delta_x * sigma_xx_inv +
-                                        delta_y * delta_y * sigma_yy_inv));
-        particle.weight *= local_weight;
-        weights[i] = particle.weight;
-      }
+      auto nearest_landmark = landmarks_in_range.at(observation.id);
+      // std::cout << observation_map.count(observation.id) << std::endl;
+
+      const double delta_x = observation.x - nearest_landmark.x;
+      const double delta_y = observation.y - nearest_landmark.y;
+
+      const double local_weight =
+          gaussian_norm * exp(-0.5 * (delta_x * delta_x * sigma_xx_inv +
+                                      delta_y * delta_y * sigma_yy_inv));
+      W *= local_weight;
     }
-    // SetAssociations(particle, associations, sense_x, sense_y);
+
+    particles[i].weight = W;
+    // SetAssociations(particles[i], associations, sense_x, sense_y);
   }
+
+  // normalize
+  // double sum_w = accumulate(weights.begin(), weights.end(), 0.0);
+  // std::for_each(weights.begin(), weights.end(),
+  //              [&](double x) { return x / sum_w; });
 }
 
 void ParticleFilter::resample() {
