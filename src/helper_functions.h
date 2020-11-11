@@ -245,4 +245,17 @@ inline bool read_landmark_data(std::string filename,
   return true;
 }
 
+inline std::vector<LandmarkObs> get_landmarks_close_to_particle(
+    const double x, const double y, const double range, const Map& map) {
+  std::vector<LandmarkObs> nearest_landmarks;
+  for (const auto& landmark : map.landmark_list) {
+    const double euclidian_distance = dist(x, y, landmark.x_f, landmark.y_f);
+    if (euclidian_distance < range) {
+      nearest_landmarks.emplace_back(
+          LandmarkObs{landmark.id_i, landmark.x_f, landmark.y_f});
+    }
+  }
+  return nearest_landmarks;
+}
+
 #endif  // HELPER_FUNCTIONS_H_
