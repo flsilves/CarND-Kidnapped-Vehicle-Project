@@ -25,16 +25,16 @@ using std::vector;
 static std::default_random_engine gen;
 
 constexpr auto init_weight{1.0};
-constexpr auto number_of_particles{200};
 
 void ParticleFilter::init(double x, double y, double theta, double std[]) {
   std::normal_distribution<double> dist_x(x, std[0]);
   std::normal_distribution<double> dist_y(y, std[1]);
   std::normal_distribution<double> dist_theta(theta, std[2]);
 
-  particles.reserve(number_of_particles);
+  particles.reserve(num_particles);
+  weights.resize(num_particles);
 
-  for (int id = 1; id <= number_of_particles; ++id) {
+  for (int id = 1; id <= num_particles; ++id) {
     particles.emplace_back(
         Particle{id, dist_x(gen), dist_y(gen), dist_theta(gen), init_weight});
   }
@@ -54,7 +54,6 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
     const double dy = delta_t * velocity * sin(th0);
     p.x = p.x + dx + dist_x(gen);
     p.y = p.y + dy + dist_y(gen);
-    return p;
   };
 
   static const auto update_particles = [&](Particle& p) {
@@ -65,15 +64,13 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
     p.x = p.x + dx + dist_x(gen);
     p.y = p.y + dy + dist_y(gen);
     p.theta = th0 + dth + dist_theta(gen);
-    return p;
   };
 
   if (abs(yaw_rate) < 1E-6) {
-    std::transform(particles.begin(), particles.end(), particles.begin(),
-                   update_particles_zero_yaw);
+    std::for_each(particles.begin(), particles.end(),
+                  update_particles_zero_yaw);
   } else {
-    std::transform(particles.begin(), particles.end(), particles.begin(),
-                   update_particles);
+    std::for_each(particles.begin(), particles.end(), update_particles);
   }
 }
 
@@ -111,7 +108,9 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     return;
   }
 
+  int i = -1;
   for (auto& particle : particles) {
+    i += 1;
     const double p_x = particle.x;
     const double p_y = particle.y;
     const double p_th = particle.theta;
@@ -122,6 +121,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     if (predicted_observations.empty()) {
       // dont update this particle and assign low weight;
       particle.weight = 0.000001 / particles.size();
+      weights[i] = particle.weight;
       continue;
     }
 
@@ -158,42 +158,27 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             gaussian_norm * exp(-0.5 * (delta_x * delta_x * sigma_xx_inv +
                                         delta_y * delta_y * sigma_yy_inv));
         particle.weight *= local_weight;
+        weights[i] = particle.weight;
       }
     }
     SetAssociations(particle, associations, sense_x, sense_y);
   }
-
-  // normalize
-  const double W =
-      std::accumulate(particles.begin(), particles.end(), 0.0,
-                      [](double r, const Particle& p) { return r + p.weight; });
-  if (W < 0.000000001) {
-    return;
-  }
-  for (auto& particle : particles) {
-    particle.weight = particle.weight / W;
-  }
-  double alpha_sum = 0;
-  for (const auto& particle : particles) {
-    alpha_sum += particle.weight;
-  }
 }
 
 void ParticleFilter::resample() {
-  std::vector<double> weights;
-  for (const auto& particle : particles) {
-    weights.emplace_back(particle.weight);
-  }
+  vector<Particle> new_particles(num_particles);
 
-  // weighted discrete distribution in range [0, N)
-  std::default_random_engine gen;
-  std::discrete_distribution<> d(weights.begin(), weights.end());
+  double beta{0};
+  int index = rand() % num_particles;
+  auto max_weight_element = *std::max_element(weights.begin(), weights.end());
 
-  // new particles
-  std::vector<Particle> new_particles;
-  for (size_t i = 0; i < particles.size(); ++i) {
-    const int index = d(gen);
-    new_particles.push_back(particles[index]);
+  for (auto i = 0; i < num_particles; ++i) {
+    beta += (rand() / (RAND_MAX + 1.0)) * (2 * max_weight_element);
+    while (weights[index] < beta) {
+      beta -= weights[index];
+      index = (index + 1) % num_particles;
+    }
+    new_particles[i] = particles[index];
   }
   particles = new_particles;
 }

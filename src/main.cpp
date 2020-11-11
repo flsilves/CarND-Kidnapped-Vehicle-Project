@@ -47,7 +47,7 @@ int main() {
   }
 
   // Create particle filter
-  ParticleFilter pf;
+  ParticleFilter pf(100);
 
   h.onMessage([&pf, &map, &delta_t, &sensor_range, &sigma_pos, &sigma_landmark](
                   uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -133,8 +133,9 @@ int main() {
             weight_sum += particles[i].weight;
           }
 
-          std::cout << "highest w " << highest_weight << std::endl;
-          std::cout << "average w " << weight_sum / num_particles << std::endl;
+          // std::cout << "highest w " << highest_weight << std::endl;
+          // std::cout << "average w " << weight_sum / num_particles <<
+          // std::endl;
 
           json msgJson;
           msgJson["best_particle_x"] = best_particle.x;
