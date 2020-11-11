@@ -10,6 +10,7 @@
 #include <math.h>
 
 #include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <iterator>
 #include <numeric>
@@ -79,7 +80,7 @@ void ParticleFilter::dataAssociation(const vector<LandmarkObs>& predicted,
   // no modification of observation id if there's no updates
   for (auto& observation : observations) {
     double nearest_distance = std::numeric_limits<double>::max();
-    int nearest_id = -1;
+    int nearest_id = 0;
     for (const auto& landmark : predicted) {
       const double distance =
           dist(observation.x, observation.y, landmark.x, landmark.y);
@@ -166,20 +167,13 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 }
 
 void ParticleFilter::resample() {
-  vector<Particle> new_particles(num_particles);
+  std::discrete_distribution<> sampler(weights.begin(), weights.end());
 
-  double beta{0};
-  int index = rand() % num_particles;
-  auto max_weight_element = *std::max_element(weights.begin(), weights.end());
+  std::vector<Particle> new_particles{num_particles};
 
-  for (auto i = 0; i < num_particles; ++i) {
-    beta += (rand() / (RAND_MAX + 1.0)) * (2 * max_weight_element);
-    while (weights[index] < beta) {
-      beta -= weights[index];
-      index = (index + 1) % num_particles;
-    }
-    new_particles[i] = particles[index];
-  }
+  std::generate(new_particles.begin(), new_particles.end(),
+                [&]() { return particles[sampler(gen)]; });
+
   particles = new_particles;
 }
 
