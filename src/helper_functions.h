@@ -11,7 +11,9 @@
 
 #include <math.h>
 
+#include <algorithm>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -44,6 +46,8 @@ struct ground_truth {
  * Struct representing one landmark observation measurement.
  */
 struct LandmarkObs {
+  LandmarkObs() = default;
+  LandmarkObs(int id, double x, double y) : id(id), x(x), y(y) {}
   int id;    // Id of matching landmark in the map.
   double x;  // Local (vehicle coords) x position of landmark observation [m]
   double y;  // Local (vehicle coords) y position of landmark observation [m]
@@ -243,6 +247,41 @@ inline bool read_landmark_data(std::string filename,
     observations.push_back(meas);
   }
   return true;
+}
+
+inline bool getLandmarkById(const std::vector<LandmarkObs>& landmarks, int id,
+                            LandmarkObs& result) {
+  const auto it = std::find_if(
+      landmarks.begin(), landmarks.end(),
+      [id](const LandmarkObs& landmark) { return id == landmark.id; });
+  if (it == landmarks.end()) {
+    std::cerr << "Expected landmark with id (" << id
+              << "), but this is not available." << std::endl;
+    return false;
+  }
+  result = *it;
+  return true;
+}
+
+inline std::vector<LandmarkObs> getNearLandmarks(const double x, const double y,
+                                                 const double range,
+                                                 const Map& map) {
+  std::vector<LandmarkObs> result;
+  for (const auto& landmark : map.landmark_list) {
+    const double distance = dist(x, y, landmark.x_f, landmark.y_f);
+    if (distance < range) {
+      result.emplace_back(landmark.id_i, landmark.x_f, landmark.y_f);
+    }
+  }
+  return result;
+}
+
+inline LandmarkObs transformObservationToMap(const LandmarkObs& observation,
+                                             const double px, const double py,
+                                             const double pth) {
+  const double mx = cos(pth) * observation.x - sin(pth) * observation.y + px;
+  const double my = sin(pth) * observation.x + cos(pth) * observation.y + py;
+  return LandmarkObs(observation.id, mx, my);
 }
 
 #endif  // HELPER_FUNCTIONS_H_
