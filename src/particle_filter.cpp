@@ -22,16 +22,34 @@
 using std::string;
 using std::vector;
 
-void ParticleFilter::init(double x, double y, double theta, double std[]) {
-  /**
-   * TODO: Set the number of particles. Initialize all particles to
-   *   first position (based on estimates of x, y, theta and their uncertainties
-   *   from GPS) and all weights to 1.
-   * TODO: Add random Gaussian noise to each particle.
-   * NOTE: Consult particle_filter.h for more information about this method
-   *   (and others in this file).
-   */
-  num_particles = 0;  // TODO: Set the number of particles
+static std::default_random_engine random_engine;
+constexpr auto number_of_particles{200};
+
+void ParticleFilter::init(double x, double y, double theta,
+                          double gps_sigma[]) {
+  std::normal_distribution<double> dist_x(x, gps_sigma[0]);
+  std::normal_distribution<double> dist_y(y, gps_sigma[1]);
+  std::normal_distribution<double> dist_theta(theta, gps_sigma[2]);
+
+  // Add noise to initial position using GPS standard deviation
+  const auto init_x = dist_x(random_engine);
+  const auto init_y = dist_y(random_engine);
+  const auto init_theta = dist_theta(random_engine);
+
+  constexpr auto init_weight{1.0};
+
+  particles.reserve(number_of_particles);
+
+  for (int id = 1; id <= number_of_particles; ++id) {
+    particles.emplace_back(
+        Particle{id, init_x, init_y, init_theta, init_weight});
+  }
+
+  is_initialized = true;
+
+  // std::cout << "associations:" << particles[0].associations.size() <<
+  // std::endl; std::cout << "x:" << particles[0].sense_x.size() << std::endl;
+  // std::cout << "y:" << particles[0].sense_y.size() << std::endl;
 }
 
 void ParticleFilter::prediction(double delta_t, double std_pos[],
