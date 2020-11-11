@@ -67,7 +67,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
     p.theta = th0 + dth + dist_theta(gen);
   };
 
-  if (abs(yaw_rate) < 1E-6) {
+  if (abs(yaw_rate) < 1E-3) {
     std::for_each(particles.begin(), particles.end(), update_particles_v1);
   } else {
     std::for_each(particles.begin(), particles.end(), update_particles_v2);
@@ -96,47 +96,36 @@ void ParticleFilter::dataAssociation(const vector<LandmarkObs>& predicted,
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                                    const vector<LandmarkObs>& observations,
                                    const Map& map_landmarks) {
-  const double sigma_x = std_landmark[0];
-  const double sigma_y = std_landmark[1];
-  const double sigma_xx = sigma_x * sigma_x;
-  const double sigma_yy = sigma_y * sigma_y;
-  const double sigma_xx_inv = 1.0 / sigma_xx;
-  const double sigma_yy_inv = 1.0 / sigma_yy;
-  const double gaussian_norm = 1.0 / (2 * M_PI * sigma_x * sigma_y);
+  const double a = (2 * M_PI * std_landmark[0] * std_landmark[1]);
+  const double var_x = std_landmark[0] * std_landmark[0];
+  const double var_y = std_landmark[1] * std_landmark[1];
 
-  // will not update if there are no observations
   if (observations.empty()) {
     return;
   }
 
-  // std::cout << "num_observations:" << observations.size() << std::endl;
-
-  // for (auto& observation : observations) {
-  //  std::cout << "ids:" << observation.id << ",";
-  //}
-  std::cout << std::endl;
-
   for (int i = 0; i < num_particles; weights[i] = particles[i].weight, ++i) {
-    const double p_x = particles[i].x;
-    const double p_y = particles[i].y;
-    const double p_theta = particles[i].theta;
+    const double& p_x = particles[i].x;
+    const double& p_y = particles[i].y;
+    const double& p_theta = particles[i].theta;
+    const double& p_sin = sin(p_theta);
+    const double& p_cos = cos(p_theta);
 
-    // Create list of nearby_landmarks landmarks in sensor range (/map frame).
+    // Create list of landmarks in sensor range
     vector<LandmarkObs> landmarks_in_range =
-        getNearLandmarks(p_x, p_y, sensor_range, map_landmarks);
+        get_landmarks_close_to_particle(p_x, p_y, sensor_range, map_landmarks);
 
     if (landmarks_in_range.empty()) {
-      particles[i].weight = 1e-12;
+      particles[i].weight = 1e-20;
       continue;
     }
 
+    // Project observation coordinates into map coordinates
     auto map_observations = std::vector<LandmarkObs>{observations};
 
     auto get_map_coordinates = [&](LandmarkObs& observation) {
-      double map_obs_x =
-          p_x + cos(p_theta) * observation.x - sin(p_theta) * observation.y;
-      double map_obs_y =
-          p_y + sin(p_theta) * observation.x + cos(p_theta) * observation.y;
+      double map_obs_x = p_x + p_cos * observation.x - p_sin * observation.y;
+      double map_obs_y = p_y + p_sin * observation.x + p_cos * observation.y;
 
       observation.x = map_obs_x;
       observation.y = map_obs_y;
@@ -145,31 +134,21 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     std::for_each(map_observations.begin(), map_observations.end(),
                   get_map_coordinates);
 
-    // associate observations to given landmarks.
+    // Map each observation with the closest landmark to the particle
     dataAssociation(landmarks_in_range, map_observations);
 
-    // std::vector<int> associations;
-    // std::vector<double> sense_x;
-    // std::vector<double> sense_y;
-
-    // update weight using multivariate gaussian distribution
+    // For each observation calculate the distance to the closest landmark, the
+    // productory of all distances is the weight of the particle
     double W{1.0};
     for (const auto& observation : map_observations) {
-      // debugging
-      // associations.push_back(observation.id);
-      // sense_x.push_back(observation.x);
-      // sense_y.push_back(observation.y);
-
       auto nearest_landmark = landmarks_in_range.at(observation.id);
-      // std::cout << observation_map.count(observation.id) << std::endl;
 
       const double delta_x = observation.x - nearest_landmark.x;
       const double delta_y = observation.y - nearest_landmark.y;
 
-      const double local_weight =
-          gaussian_norm * exp(-0.5 * (delta_x * delta_x * sigma_xx_inv +
-                                      delta_y * delta_y * sigma_yy_inv));
-      W *= local_weight;
+      const double b = 0.5 * (delta_x) * (delta_x) * (1 / var_x);
+      const double c = 0.5 * (delta_y) * (delta_y) * (1 / var_y);
+      W *= exp(-(b + c)) / a;
     }
 
     particles[i].weight = W;
