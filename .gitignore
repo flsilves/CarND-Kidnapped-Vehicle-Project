@@ -5,4 +5,9 @@ solution
 solution_data
 src/particle_filter_sol.cpp
 src/solutions
+.vscode
+.cache
+CMake*
+cmake_install.cmake
+Makefile
 # particle_filter.cpp
