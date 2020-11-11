@@ -49,8 +49,9 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
   std::normal_distribution<double> dist_theta(0.0, std_pos[2]);
 
   static const auto update_particles_zero_yaw = [&](Particle& p) {
-    const double dx = delta_t * velocity * cos(p.theta);
-    const double dy = delta_t * velocity * sin(p.theta);
+    const double th0 = p.theta;
+    const double dx = delta_t * velocity * cos(th0);
+    const double dy = delta_t * velocity * sin(th0);
     p.x = p.x + dx + dist_x(gen);
     p.y = p.y + dy + dist_y(gen);
     return p;
@@ -63,6 +64,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
     const double dy = velocity * (cos(th0) - cos(th0 + dth)) / yaw_rate;
     p.x = p.x + dx + dist_x(gen);
     p.y = p.y + dy + dist_y(gen);
+    p.theta = th0 + dth + dist_theta(gen);
     return p;
   };
 
@@ -75,20 +77,21 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
   }
 }
 
-void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
+void ParticleFilter::dataAssociation(const vector<LandmarkObs>& predicted,
                                      vector<LandmarkObs>& observations) {
   // no modification of observation id if there's no updates
   for (auto& observation : observations) {
     double nearest_distance = std::numeric_limits<double>::max();
-
+    int nearest_id = -1;
     for (const auto& landmark : predicted) {
       const double distance =
           dist(observation.x, observation.y, landmark.x, landmark.y);
       if (distance < nearest_distance) {
         nearest_distance = distance;
-        observation.id = landmark.id;
+        nearest_id = landmark.id;
       }
     }
+    observation.id = nearest_id;
   }
 }
 
@@ -178,18 +181,16 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
 void ParticleFilter::resample() {
   std::vector<double> weights;
-  weights.reserve(particles.size());
-
-  std::transform(particles.begin(), particles.end(),
-                 std::back_inserter(weights),
-                 [](Particle& p) { return p.weight; });
+  for (const auto& particle : particles) {
+    weights.emplace_back(particle.weight);
+  }
 
   // weighted discrete distribution in range [0, N)
+  std::default_random_engine gen;
   std::discrete_distribution<> d(weights.begin(), weights.end());
 
   // new particles
-  std::vector<Particle> new_particles(particles);
-
+  std::vector<Particle> new_particles;
   for (size_t i = 0; i < particles.size(); ++i) {
     const int index = d(gen);
     new_particles.push_back(particles[index]);
