@@ -12,6 +12,10 @@ using nlohmann::json;
 using std::string;
 using std::vector;
 
+namespace parameters {
+constexpr auto number_of_particles{100U};
+}
+
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
@@ -47,7 +51,7 @@ int main() {
   }
 
   // Create particle filter
-  ParticleFilter pf;
+  ParticleFilter pf(parameters::number_of_particles);
 
   h.onMessage([&pf, &map, &delta_t, &sensor_range, &sigma_pos, &sigma_landmark](
                   uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,

@@ -31,6 +31,9 @@ class ParticleFilter {
   // @param num_particles Number of particles
   ParticleFilter() : num_particles(0), is_initialized(false) {}
 
+  ParticleFilter(size_t num_particles)
+      : num_particles(num_particles), is_initialized(false) {}
+
   // Destructor
   ~ParticleFilter() {}
 
@@ -63,7 +66,7 @@ class ParticleFilter {
    * @param predicted Vector of predicted landmark observations
    * @param observations Vector of landmark observations
    */
-  void dataAssociation(std::vector<LandmarkObs> predicted,
+  void dataAssociation(const std::vector<LandmarkObs>& predicted,
                        std::vector<LandmarkObs>& observations);
 
   /**
@@ -111,7 +114,7 @@ class ParticleFilter {
 
  private:
   // Number of particles to draw
-  int num_particles;
+  std::size_t num_particles;
 
   // Flag, if filter is initialized
   bool is_initialized;
