@@ -113,39 +113,48 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
     i += 1;
     const double p_x = particle.x;
     const double p_y = particle.y;
-    const double p_th = particle.theta;
+    const double p_theta = particle.theta;
 
     // Create list of predicted landmarks in sensor range (/map frame).
     vector<LandmarkObs> predicted_observations =
         getNearLandmarks(p_x, p_y, sensor_range, map_landmarks);
+
     if (predicted_observations.empty()) {
       // dont update this particle and assign low weight;
-      particle.weight = 0.000001 / particles.size();
+      particle.weight = 1e-9;
       weights[i] = particle.weight;
       continue;
     }
 
-    // Transform observations from /car to /map frames.
-    vector<LandmarkObs> map_observations;
-    for (const auto& observation : observations) {
-      map_observations.emplace_back(
-          transformObservationToMap(observation, p_x, p_y, p_th));
-    }
+    auto map_observations = std::vector<LandmarkObs>{observations};
+
+    auto get_map_coordinates = [&](LandmarkObs& observation) {
+      double map_obs_x =
+          p_x + cos(p_theta) * observation.x - sin(p_theta) * observation.y;
+      double map_obs_y =
+          p_y + sin(p_theta) * observation.x + cos(p_theta) * observation.y;
+
+      observation.x = map_obs_x;
+      observation.y = map_obs_y;
+    };
+
+    std::for_each(map_observations.begin(), map_observations.end(),
+                  get_map_coordinates);
 
     // associate observations to given landmarks.
     dataAssociation(predicted_observations, map_observations);
 
-    std::vector<int> associations;
-    std::vector<double> sense_x;
-    std::vector<double> sense_y;
+    // std::vector<int> associations;
+    // std::vector<double> sense_x;
+    // std::vector<double> sense_y;
 
     // update weight using multivariate gaussian distribution
     particle.weight = 1;
     for (const auto& observation : map_observations) {
       // debugging
-      associations.push_back(observation.id);
-      sense_x.push_back(observation.x);
-      sense_y.push_back(observation.y);
+      // associations.push_back(observation.id);
+      // sense_x.push_back(observation.x);
+      // sense_y.push_back(observation.y);
 
       // get associated landmark
       LandmarkObs landmark;
@@ -161,7 +170,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         weights[i] = particle.weight;
       }
     }
-    SetAssociations(particle, associations, sense_x, sense_y);
+    // SetAssociations(particle, associations, sense_x, sense_y);
   }
 }
 
