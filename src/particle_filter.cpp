@@ -49,7 +49,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
   std::normal_distribution<double> dist_y(0.0, std_pos[1]);
   std::normal_distribution<double> dist_theta(0.0, std_pos[2]);
 
-  static const auto update_particles_zero_yaw = [&](Particle& p) {
+  static const auto update_particles_v1 = [&](Particle& p) {
     const double th0 = p.theta;
     const double dx = delta_t * velocity * cos(th0);
     const double dy = delta_t * velocity * sin(th0);
@@ -57,7 +57,7 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
     p.y = p.y + dy + dist_y(gen);
   };
 
-  static const auto update_particles = [&](Particle& p) {
+  static const auto update_particles_v2 = [&](Particle& p) {
     const double th0 = p.theta;
     const double dth = yaw_rate * delta_t;
     const double dx = velocity * (sin(th0 + dth) - sin(th0)) / yaw_rate;
@@ -68,10 +68,9 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
   };
 
   if (abs(yaw_rate) < 1E-6) {
-    std::for_each(particles.begin(), particles.end(),
-                  update_particles_zero_yaw);
+    std::for_each(particles.begin(), particles.end(), update_particles_v1);
   } else {
-    std::for_each(particles.begin(), particles.end(), update_particles);
+    std::for_each(particles.begin(), particles.end(), update_particles_v2);
   }
 }
 
