@@ -73,15 +73,17 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
   }
 }
 
-void ParticleFilter::dataAssociation(const vector<LandmarkObs>& predicted,
+void ParticleFilter::dataAssociation(const vector<LandmarkObs>& range_landmarks,
                                      vector<LandmarkObs>& observations) {
   // no modification of observation id if there's no updates
   for (auto& observation : observations) {
-    double nearest_distance = std::numeric_limits<double>::max();
+    double nearest_distance =  dist(observation.x, observation.y, range_landmarks[0].x, range_landmarks[0].y);
+
     int nearest_id = 0;
-    for (size_t i = 0; i < predicted.size(); ++i) {
-      auto landmark = predicted[i];
-      const double distance =
+    
+    for (size_t i = 1; i < range_landmarks.size(); ++i) {
+      auto landmark = range_landmarks[i];
+      double distance =
           dist(observation.x, observation.y, landmark.x, landmark.y);
       if (distance < nearest_distance) {
         nearest_distance = distance;
@@ -95,27 +97,30 @@ void ParticleFilter::dataAssociation(const vector<LandmarkObs>& predicted,
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
                                    const vector<LandmarkObs>& observations,
                                    const Map& map_landmarks) {
-  const double a = (2 * M_PI * std_landmark[0] * std_landmark[1]);
-  const double var_x = std_landmark[0] * std_landmark[0];
-  const double var_y = std_landmark[1] * std_landmark[1];
+
+
+  const auto gauss_norm = 1 / (2 * M_PI * std_landmark[0] * std_landmark[1]);
+  const auto gauss_den_x = 2 * pow(std_landmark[0], 2);
+  const auto gauss_den_y = 2 * pow(std_landmark[1], 2);
 
   if (observations.empty()) {
     return;
   }
 
-  for (int i = 0; i < num_particles; weights[i] = particles[i].weight, ++i) {
+  for (int i = 0; i < num_particles; ++i) {
     const double& p_x = particles[i].x;
     const double& p_y = particles[i].y;
-    const double& p_theta = particles[i].theta;
-    const double& p_sin = sin(p_theta);
-    const double& p_cos = cos(p_theta);
+    const double& p_sin = sin(particles[i].theta);
+    const double& p_cos = cos(particles[i].theta);
 
     // Create list of landmarks in sensor range
     vector<LandmarkObs> landmarks_in_range =
         get_landmarks_close_to_particle(p_x, p_y, sensor_range, map_landmarks);
 
     if (landmarks_in_range.empty()) {
-      particles[i].weight = 1e-20;
+      particles[i].weight = 1e-3;
+      weights[i] =  1e-3;
+
       continue;
     }
 
@@ -138,19 +143,17 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
     // For each observation calculate the distance to the closest landmark, the
     // productory of all distances is the weight of the particle
-    double W{init_weight};
+    double W = init_weight;
     for (const auto& observation : map_observations) {
       auto nearest_landmark = landmarks_in_range.at(observation.id);
 
-      const double delta_x = observation.x - nearest_landmark.x;
-      const double delta_y = observation.y - nearest_landmark.y;
+      auto exponent = pow(observation.x - nearest_landmark.x, 2) / gauss_den_x + pow(observation.y - nearest_landmark.y, 2) / gauss_den_y;
+      W *= gauss_norm * exp(-exponent);
 
-      const double b = delta_x * delta_x * 0.5 /  var_x;
-      const double c = delta_y * delta_y * 0.5 /  var_y;
-      W *= exp(-(b + c)) / a;
     }
 
     particles[i].weight = W;
+    weights[i] = W;
     // SetAssociations(particles[i], associations, sense_x, sense_y);
   }
 
