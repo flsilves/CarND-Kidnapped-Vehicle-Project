@@ -44,32 +44,36 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 
 void ParticleFilter::prediction(double delta_t, double std_pos[],
                                 double velocity, double yaw_rate) {
-  std::normal_distribution<double> dist_x(0.0, std_pos[0]);
-  std::normal_distribution<double> dist_y(0.0, std_pos[1]);
-  std::normal_distribution<double> dist_theta(0.0, std_pos[2]);
+ std::default_random_engine gen;
 
-  static const auto update_particles_v1 = [&](Particle& p) {
-    const double th0 = p.theta;
-    const double dx = delta_t * velocity * cos(th0);
-    const double dy = delta_t * velocity * sin(th0);
-    p.x = p.x + dx + dist_x(gen);
-    p.y = p.y + dy + dist_y(gen);
-  };
+  auto x_std = std_pos[0];
+  auto y_std = std_pos[1];
+  auto yaw_std = std_pos[2];
 
-  static const auto update_particles_v2 = [&](Particle& p) {
-    const double th0 = p.theta;
-    const double dth = yaw_rate * delta_t;
-    const double dx = velocity * (sin(th0 + dth) - sin(th0)) / yaw_rate;
-    const double dy = velocity * (cos(th0) - cos(th0 + dth)) / yaw_rate;
-    p.x = p.x + dx + dist_x(gen);
-    p.y = p.y + dy + dist_y(gen);
-    p.theta = th0 + dth + dist_theta(gen);
-  };
+  double new_x, new_y, new_theta;
 
-  if (abs(yaw_rate) < 1E-3) {
-    std::for_each(particles.begin(), particles.end(), update_particles_v1);
-  } else {
-    std::for_each(particles.begin(), particles.end(), update_particles_v2);
+  for (uint i = 0; i < num_particles; i++)
+  {
+    if (yaw_rate == 0)
+    {
+      new_x = particles[i].x + velocity * delta_t * cos(particles[i].theta);
+      new_y = particles[i].y + velocity * delta_t * sin(particles[i].theta);
+      new_theta = particles[i].theta;
+    }
+    else
+    {
+      new_x = particles[i].x +
+              (velocity / yaw_rate) * (sin(particles[i].theta + yaw_rate * delta_t) - sin(particles[i].theta));
+      new_y = particles[i].y +
+              (velocity / yaw_rate) * (cos(particles[i].theta) - cos(particles[i].theta + yaw_rate * delta_t));
+      new_theta = particles[i].theta + yaw_rate * delta_t;
+    }
+    std::normal_distribution<double> dist_x(new_x, x_std);
+    particles[i].x = dist_x(gen);
+    std::normal_distribution<double> dist_y(new_y, y_std);
+    particles[i].y = dist_y(gen);
+    std::normal_distribution<double> dist_theta(new_theta, yaw_std);
+    particles[i].theta = dist_theta(gen);
   }
 }
 
