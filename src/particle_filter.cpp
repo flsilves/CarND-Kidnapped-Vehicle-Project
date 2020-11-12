@@ -161,13 +161,23 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 }
 
 void ParticleFilter::resample() {
-  std::discrete_distribution<> sampler(weights.begin(), weights.end());
+  vector<Particle> new_particles(num_particles);
 
-  std::vector<Particle> new_particles{num_particles};
+  double beta = 0;
+  int index = rand() % num_particles;
+  auto max_weight_element = max_element(weights.begin(), weights.end());
 
-  std::generate(new_particles.begin(), new_particles.end(),
-                [&]() { return particles[sampler(gen)]; });
+  for (uint i = 0; i < num_particles; ++i)
+  {
 
+    beta += (rand() / (RAND_MAX + 1.0)) * (2 * (*max_weight_element));
+    while (weights[index] < beta)
+    {
+      beta -= weights[index];
+      index = (index + 1) % num_particles;
+    }
+    new_particles[i] = particles[index];
+  }
   particles = new_particles;
 }
 
